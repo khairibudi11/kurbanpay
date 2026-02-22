@@ -6,8 +6,7 @@
   <meta name="theme-color" content="#41644A">
   <title>KurbanPay</title>
   
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌿</text></svg>">
-  
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐄</text></svg>">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -204,6 +203,10 @@
     let html5QrcodeScanner = null;
     let isCameraRunning = false;
     let isLocked = false;
+    
+    // --- EFEK SUARA ---
+    // Link audio ini menggunakan suara "Ting!" (berhasil) yang pendek & ringan
+    const suaraSukses = new Audio('https://upload.wikimedia.org/wikipedia/commons/3/34/Sound_Effect_-_Success_01.ogg');
 
     function formatRupiahInput(input) {
       let plain = input.value.replace(/\D/g, ''); 
@@ -309,6 +312,14 @@
     function handleSuccess(res) {
       document.getElementById('loadingOverlay').style.display = 'none';
       if (res.status === 'sukses') {
+        
+        // ---> TAMBAHKAN KODE INI DI SINI <---
+        suaraSukses.play().catch(e => console.log("Audio tertahan browser"));
+        
+        Swal.fire({ icon: 'success', title: 'Berhasil!', html: `<h3 style="color:#41644A;">${res.nominal}</h3><p>${res.nama}</p>`, showConfirmButton: false, timer: 1500 });
+        document.getElementById('manualId').value = '';
+        document.getElementById('inputNominal').value = ''; 
+        updateUI({ list: res.riwayatBaru, totalHariIni: res.totalHariIni });
         Swal.fire({ icon: 'success', title: 'Berhasil!', html: `<h3 style="color:#41644A;">${res.nominal}</h3><p>${res.nama}</p>`, showConfirmButton: false, timer: 1500 });
         document.getElementById('manualId').value = '';
         document.getElementById('inputNominal').value = ''; 
