@@ -125,7 +125,19 @@
       input.value = new Intl.NumberFormat('id-ID').format(plain);
     }
 
-    window.onload = function() { loadRiwayat(); startCamera(); };
+    window.onload = function() { 
+      // Cek apakah ada PIN di link URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const pinDariUrl = urlParams.get('pin');
+      if (pinDariUrl) {
+          localStorage.setItem('adminPin', pinDariUrl); // Simpan permanen di HP
+          // Bersihkan URL biar PIN tidak terlihat jika ada yang ngintip layar
+          window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      loadRiwayat(); 
+      startCamera(); 
+    };
 
     function toggleCamera() { isCameraRunning ? stopCamera() : startCamera(); }
 
@@ -182,11 +194,12 @@
       // Mengirim Data ke Google Script
       fetch(API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Penting untuk bypass CORS
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
             action: 'prosesScan',
             idUser: idUser,
-            nominalInput: cleanNominal
+            nominalInput: cleanNominal,
+            pin: localStorage.getItem('adminPin') // Kunci dikirim ke server!
         })
       })
       .then(response => response.json())
