@@ -87,17 +87,16 @@
        ========================================================= */
     @media (min-width: 768px) {
       body {
-        align-items: center; /* Posisikan aplikasi di tengah layar */
+        align-items: center; 
         padding: 40px 20px;
       }
       
       .app-container {
-        max-width: 950px; /* Lebar maksimal layarnya */
+        max-width: 950px; 
         min-height: auto;
         background: transparent;
         box-shadow: none;
         
-        /* Membelah jadi 2 kolom */
         display: grid;
         grid-template-columns: 1fr 1fr;
         grid-template-areas: 
@@ -109,14 +108,14 @@
 
       .header-nature {
         grid-area: header;
-        border-radius: 24px; /* Sudut melengkung semua */
+        border-radius: 24px; 
         padding: 30px;
         box-shadow: 0 10px 25px rgba(65, 100, 74, 0.15);
       }
 
       .main-card {
         grid-area: main;
-        margin: 0; /* Hapus margin negatif dari versi HP */
+        margin: 0; 
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
       }
 
@@ -126,11 +125,10 @@
         border-radius: 24px;
         padding: 25px;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
-        max-height: 400px; /* Agar jika data banyak, bisa di-scroll di kotaknya saja */
+        max-height: 400px; 
         overflow-y: auto;
       }
 
-      /* Ubah loading overlay agar menutupi seluruh layar PC */
       #loadingOverlay { position: fixed; }
     }
   </style>
@@ -184,6 +182,16 @@
               KIRIM <i class="fas fa-paper-plane" style="margin-left:5px;"></i>
           </button>
       </div>
+
+      <div style="margin-top: 15px; position: relative;">
+          <div style="text-align: center; margin-bottom: 8px;">
+              <span style="background: #F3F4F6; padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; color: var(--text-muted);">ATAU PILIH NAMA WARGA</span>
+          </div>
+          <select id="selectWarga" class="inp-manual" style="width: 100%; text-align: left; cursor: pointer; appearance: auto;" onchange="pilihWarga()">
+              <option value="">⏳ Memuat daftar warga...</option>
+          </select>
+      </div>
+
     </div>
 
     <div class="history-section">
@@ -197,7 +205,6 @@
   </div>
 
   <script>
-    // MASUKKAN LINK WEB APP GOOGLE SCRIPT BAPAK DI BAWAH INI
     const API_URL = "https://script.google.com/macros/s/AKfycbyYBjNzPw1SCIWAEtfCdf3bKGCHCJPSY1a5gQEbnyg83Glgtp1ornqgIMs9TXjm9mzi/exec";
     
     let html5QrcodeScanner = null;
@@ -205,7 +212,6 @@
     let isLocked = false;
     
     // --- EFEK SUARA ---
-    // Link audio ini menggunakan suara "Ting!" (berhasil) yang pendek & ringan
     const suaraSukses = new Audio('https://upload.wikimedia.org/wikipedia/commons/3/34/Sound_Effect_-_Success_01.ogg');
 
     function formatRupiahInput(input) {
@@ -219,12 +225,12 @@
       const urlParams = new URLSearchParams(window.location.search);
       const pinDariUrl = urlParams.get('pin');
       if (pinDariUrl) {
-          localStorage.setItem('adminPin', pinDariUrl); // Simpan permanen di HP Admin
-          // Bersihkan URL biar PIN tidak terlihat orang yang melirik layar
+          localStorage.setItem('adminPin', pinDariUrl); 
           window.history.replaceState({}, document.title, window.location.pathname);
       }
 
       loadRiwayat(); 
+      loadWarga(); // <-- Panggil fungsi Dropdown saat web dibuka
       startCamera(); 
     };
 
@@ -265,6 +271,34 @@
         });
     }
 
+    // --- FITUR LOAD DAFTAR WARGA ---
+    function loadWarga() {
+      fetch(API_URL + "?action=getWarga")
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('selectWarga');
+            select.innerHTML = '<option value="">-- Cari / Pilih Nama Warga --</option>'; 
+            
+            data.forEach(warga => {
+                let opt = document.createElement('option');
+                opt.value = warga.id; // Nilai yang dikirim ID-nya
+                opt.innerHTML = warga.nama + " (" + warga.id + ")"; // Tampilan Nama (ID)
+                select.appendChild(opt);
+            });
+        })
+        .catch(err => {
+            document.getElementById('selectWarga').innerHTML = '<option value="">Gagal memuat data warga</option>';
+        });
+    }
+
+    // --- SAAT NAMA WARGA DIPILIH DARI DROPDOWN ---
+    function pilihWarga() {
+        const select = document.getElementById('selectWarga');
+        if(select.value !== "") {
+            document.getElementById('manualId').value = select.value;
+        }
+    }
+
     function prosesData(idUser) {
       let rawString = document.getElementById('inputNominal').value;
       let cleanNominal = rawString.replace(/\./g, '');
@@ -279,7 +313,6 @@
       isLocked = true;
       document.getElementById('loadingOverlay').style.display = 'flex';
 
-      // Mengirim Data ke Google Script (Sertakan PIN Admin)
       fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
@@ -287,7 +320,7 @@
             action: 'prosesScan',
             idUser: idUser,
             nominalInput: cleanNominal,
-            pin: localStorage.getItem('adminPin') // Kunci dikirim ke server!
+            pin: localStorage.getItem('adminPin')
         })
       })
       .then(response => response.json())
@@ -313,19 +346,18 @@
       document.getElementById('loadingOverlay').style.display = 'none';
       if (res.status === 'sukses') {
         
-        // ---> TAMBAHKAN KODE INI DI SINI <---
+        // Putar suara
         suaraSukses.play().catch(e => console.log("Audio tertahan browser"));
         
         Swal.fire({ icon: 'success', title: 'Berhasil!', html: `<h3 style="color:#41644A;">${res.nominal}</h3><p>${res.nama}</p>`, showConfirmButton: false, timer: 1500 });
+        
+        // Reset form
         document.getElementById('manualId').value = '';
         document.getElementById('inputNominal').value = ''; 
-        updateUI({ list: res.riwayatBaru, totalHariIni: res.totalHariIni });
-        Swal.fire({ icon: 'success', title: 'Berhasil!', html: `<h3 style="color:#41644A;">${res.nominal}</h3><p>${res.nama}</p>`, showConfirmButton: false, timer: 1500 });
-        document.getElementById('manualId').value = '';
-        document.getElementById('inputNominal').value = ''; 
+        document.getElementById('selectWarga').value = ''; // Reset dropdown juga
+        
         updateUI({ list: res.riwayatBaru, totalHariIni: res.totalHariIni });
       } else {
-        // Jika gagal karena PIN salah atau tidak terdaftar
         Swal.fire({ title: 'Gagal', text: res.pesan, icon: 'error', confirmButtonColor: '#DC2626' });
       }
       isLocked = false;
