@@ -27,7 +27,6 @@
       display: flex; justify-content: center; color: var(--text-main); 
     }
 
-    /* --- TAMPILAN DASAR (MOBILE) --- */
     .app-container { 
       width: 100%; max-width: 480px; background-color: var(--bg-body); 
       min-height: 100vh; position: relative; box-shadow: 0 0 30px rgba(0,0,0,0.1); 
@@ -81,7 +80,6 @@
     .inp-manual:focus { border-color: var(--primary); background: #fff; }
     .btn-primary { background: var(--gradient-nature); color: white; border: none; padding: 14px 24px; border-radius: 12px; font-weight: 600; cursor: pointer; }
     
-    /* Offline Queue Alert Styling */
     #offlineAlert { display: none; background: #FEF3C7; color: #92400E; padding: 10px 15px; margin: 0 20px 15px; border-radius: 12px; font-size: 12px; font-weight: 600; align-items: center; gap: 10px; border: 1px solid #FDE68A; position: relative; z-index: 11; }
 
     .history-section { padding: 0 20px 40px; }
@@ -95,7 +93,6 @@
     .spinner-leaf { width: 40px; height: 40px; border: 4px solid var(--accent-light); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s infinite cubic-bezier(0.68, -0.55, 0.27, 1.55); }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* TAMPILAN DESKTOP */
     @media (min-width: 768px) {
       body { align-items: center; padding: 40px 20px; }
       .app-container { max-width: 950px; min-height: auto; background: transparent; box-shadow: none; display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "main header" "main history"; gap: 25px; padding: 0; }
@@ -115,7 +112,6 @@
       <p style="margin-top:15px; font-weight:600; color: var(--primary);">Menyimpan...</p>
     </div>
 
-    <!-- Antrian Offline -->
     <div id="offlineAlert">
         <i class="fas fa-wifi-slash"></i>
         <span>Ada <b id="queueCount">0</b> data tersimpan offline. Akan dikirim saat sinyal kembali.</span>
@@ -191,7 +187,6 @@
     let isLocked = false;
     let isOnline = navigator.onLine;
     
-    // --- EFEK SUARA ---
     const suaraSukses = new Audio('https://upload.wikimedia.org/wikipedia/commons/3/34/Sound_Effect_-_Success_01.ogg');
 
     function formatRupiahInput(input) {
@@ -213,9 +208,15 @@
       loadWarga(); 
       startCamera(); 
       
-      // Listeners Koneksi
-      window.addEventListener('online', () => { isOnline = true; updateStatusUI(); syncData(); });
-      window.addEventListener('offline', () => { isOnline = false; updateStatusUI(); });
+      window.addEventListener('online', () => { 
+          isOnline = true; 
+          updateStatusUI(); 
+          syncData(); 
+      });
+      window.addEventListener('offline', () => { 
+          isOnline = false; 
+          updateStatusUI(); 
+      });
       
       updateQueueAlert();
     };
@@ -236,17 +237,17 @@
         }
     }
 
-    // --- LOGIKA OFFLINE QUEUE ---
     function saveOffline(data) {
         let queue = JSON.parse(localStorage.getItem('kurban_queue') || '[]');
+        const sel = document.getElementById('selectWarga');
         queue.push({
             ...data,
             timestamp: new Date().toLocaleTimeString(),
-            nama_sementara: document.getElementById('selectWarga').options[document.getElementById('selectWarga').selectedIndex]?.text.split(' (')[0] || data.idUser
+            nama_sementara: sel.selectedIndex > 0 ? sel.options[sel.selectedIndex].text.split(' (')[0] : data.idUser
         });
         localStorage.setItem('kurban_queue', JSON.stringify(queue));
         updateQueueAlert();
-        renderQueueToHistory();
+        renderHistoryWithQueue();
     }
 
     function updateQueueAlert() {
@@ -264,22 +265,49 @@
         let queue = JSON.parse(localStorage.getItem('kurban_queue') || '[]');
         if (queue.length === 0) return;
 
+        document.getElementById('loadingOverlay').style.display = 'flex';
+        document.querySelector('#loadingOverlay p').innerText = "Menyinkronkan data...";
+
+        let successCount = 0;
         for (let i = 0; i < queue.length; i++) {
             try {
-                // Gunakan mode no-cors untuk pengiriman background yang stabil saat sinyal naik turun
-                await fetch(API_URL, {
+                // Menghapus nama_sementara & timestamp agar payload bersih sesuai keinginan GAS
+                const payload = {...queue[i]};
+                delete payload.nama_sementara;
+                delete payload.timestamp;
+
+                const response = await fetch(API_URL, {
                     method: 'POST',
-                    mode: 'no-cors',
+                    mode: 'no-cors', // Tetap no-cors untuk GAS, tapi kita beri jeda
                     headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify(queue[i])
+                    body: JSON.stringify(payload)
                 });
-            } catch (e) { console.error("Gagal sinkron", e); break; }
+                successCount++;
+            } catch (e) { 
+                console.error("Gagal kirim satu item", e);
+                break; 
+            }
         }
         
-        localStorage.removeItem('kurban_queue');
-        updateQueueAlert();
-        loadRiwayat();
-        Swal.fire({ icon: 'success', title: 'Data Sinkron!', text: 'Semua data offline terkirim.', timer: 1500 });
+        if (successCount > 0) {
+            // Hapus yang berhasil dikirim dari antrian
+            const remaining = queue.slice(successCount);
+            if (remaining.length === 0) {
+                localStorage.removeItem('kurban_queue');
+            } else {
+                localStorage.setItem('kurban_queue', JSON.stringify(remaining));
+            }
+            
+            updateQueueAlert();
+            // Jeda sebentar agar GAS selesai memproses penulisan di spreadsheet sebelum fetch ulang
+            setTimeout(() => {
+                loadRiwayat();
+                document.getElementById('loadingOverlay').style.display = 'none';
+                Swal.fire({ icon: 'success', title: 'Data Sinkron!', text: successCount + ' data berhasil dikirim.', timer: 1500 });
+            }, 2000);
+        } else {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
     }
 
     function toggleCamera() { isCameraRunning ? stopCamera() : startCamera(); }
@@ -311,12 +339,16 @@
     }
 
     function loadRiwayat() {
-      if (!isOnline) { renderQueueToHistory(); return; }
+      if (!isOnline) { renderHistoryWithQueue(); return; }
       fetch(API_URL + "?action=getTopRiwayat")
         .then(response => response.json())
-        .then(data => updateUI(data))
+        .then(data => {
+            window.latestData = data; // Simpan cache data online
+            updateUI(data);
+        })
         .catch(err => {
-           document.getElementById('listTransaksi').innerHTML = '<div style="text-align:center; color:red;">Gagal memuat data.</div>';
+           console.error("Fetch riwayat gagal", err);
+           renderHistoryWithQueue();
         });
     }
 
@@ -369,13 +401,15 @@
 
       if (!isOnline) {
           saveOffline(payload);
-          Swal.fire({ icon: 'info', title: 'Tersimpan Offline', text: 'Sinyal lemah, data akan dikirim otomatis saat online.', timer: 2000 });
+          Swal.fire({ icon: 'info', title: 'Tersimpan Offline', text: 'Sinyal terputus. Data disimpan di HP dan akan dikirim saat online.', timer: 2500 });
           resetInputs();
+          if (isCameraRunning && html5QrcodeScanner) setTimeout(() => { html5QrcodeScanner.resume(); }, 1500);
           return;
       }
 
       isLocked = true;
       document.getElementById('loadingOverlay').style.display = 'flex';
+      document.querySelector('#loadingOverlay p').innerText = "Menyimpan...";
 
       fetch(API_URL, {
         method: 'POST',
@@ -385,10 +419,9 @@
       .then(response => response.json())
       .then(data => handleSuccess(data))
       .catch(error => {
-          // Jika gagal fetch karena sinyal putus tiba-tiba
           handleError(error);
           saveOffline(payload);
-          Swal.fire({ icon: 'warning', title: 'Terputus', text: 'Koneksi hilang, data disimpan offline.' });
+          Swal.fire({ icon: 'warning', title: 'Koneksi Gagal', text: 'Gagal menghubungi server. Data disimpan offline.' });
           resetInputs();
       });
     }
@@ -433,38 +466,16 @@
       if (isCameraRunning && html5QrcodeScanner) html5QrcodeScanner.resume();
     }
 
-    function renderQueueToHistory() {
-        let queue = JSON.parse(localStorage.getItem('kurban_queue') || '[]');
-        if (queue.length === 0 && !isOnline) return;
-        
-        const box = document.getElementById('listTransaksi');
-        let html = '';
-        
-        queue.reverse().forEach(item => {
-            const fmtNominal = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(item.nominalInput);
-            html += `
-              <div class="tx-item tx-pending">
-                <div style="display:flex; align-items:center; gap:12px;">
-                  <div class="tx-icon" style="background:#FEF3C7; color:#92400E;"><i class="fas fa-clock"></i></div>
-                  <div>
-                    <div style="font-weight:600; font-size:14px;">${item.nama_sementara}</div>
-                    <div style="font-size:11px; color:var(--warning);">Offline - Menunggu Sinyal</div>
-                  </div>
-                </div>
-                <div class="tx-amount" style="color:var(--warning);">${fmtNominal}</div>
-              </div>`;
-        });
-        
-        // Gabungkan dengan riwayat yang sudah ada jika ada
-        if (isOnline) loadRiwayat();
-        else box.innerHTML = html || '<div style="padding:30px; text-align:center; color:#9CA3AF;">Belum ada transaksi</div>';
+    function renderHistoryWithQueue() {
+        // Gunakan data cache jika ada, kalau tidak buat objek kosong
+        updateUI(window.latestData || { list: [], totalHariIni: "Rp 0" });
     }
 
     function updateUI(data) {
+      if (!data) return;
       if (data.totalHariIni) document.getElementById('textTotalHariIni').innerText = data.totalHariIni;
-      const box = document.getElementById('listTransaksi');
       
-      // Ambil data queue untuk digabung di atas riwayat asli
+      const box = document.getElementById('listTransaksi');
       let queue = JSON.parse(localStorage.getItem('kurban_queue') || '[]');
       
       if ((!data.list || data.list.length === 0) && queue.length === 0) {
@@ -474,8 +485,8 @@
 
       let html = '';
       
-      // Render Queue dulu
-      queue.reverse().forEach(item => {
+      // Render data antrian offline di posisi teratas
+      [...queue].reverse().forEach(item => {
           const fmtNominal = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(item.nominalInput);
           html += `
             <div class="tx-item tx-pending">
@@ -483,14 +494,14 @@
                 <div class="tx-icon" style="background:#FEF3C7; color:#92400E;"><i class="fas fa-clock"></i></div>
                 <div>
                   <div style="font-weight:600; font-size:14px;">${item.nama_sementara}</div>
-                  <div style="font-size:11px; color:var(--warning);">Offline - Menunggu Sinyal</div>
+                  <div style="font-size:11px; color:var(--warning);">Menunggu Sinyal (${item.timestamp})</div>
                 </div>
               </div>
               <div class="tx-amount" style="color:var(--warning);">${fmtNominal}</div>
             </div>`;
       });
 
-      // Render Riwayat Asli
+      // Render riwayat resmi dari server
       if (data.list) {
           data.list.forEach(item => {
             html += `
